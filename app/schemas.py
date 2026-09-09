@@ -10,7 +10,7 @@ class UserOut(BaseModel):
     id: int
     username: str
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Token(BaseModel):
     access_token: str
@@ -20,7 +20,7 @@ class TagOut(BaseModel):
     id: int
     name: str
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ArticleBase(BaseModel):
     title: str
@@ -44,7 +44,7 @@ class ArticleOut(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ArticleList(BaseModel):
     items: List[ArticleOut]

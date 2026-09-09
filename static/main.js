@@ -26,7 +26,17 @@ async function apiFetch(url, method = 'GET', body = null, auth = true) {
     if (response.ok) {
         return data;
     } else {
-        throw new Error(data.detail || '请求失败');
+        let errorMsg = '请求失败';
+        if (data.detail) {
+            if (typeof data.detail === 'string') {
+                errorMsg = data.detail;
+            } else if (Array.isArray(data.detail)) {
+                errorMsg = data.detail.map(item => item.msg || JSON.stringify(item)).join('；');
+            } else {
+                errorMsg = JSON.stringify(data.detail);
+            }
+        }
+        throw new Error(errorMsg);
     }
 }
 
@@ -61,8 +71,14 @@ async function login() {
 }
 
 async function register() {
-    const username = document.getElementById('username').value;
+    const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
+
+    if (!username || !password) {
+        document.getElementById('message').innerText = '用户名和密码不能为空';
+        return;
+    }
+
     try {
         const data = await apiFetch('/api/register', 'POST', { username, password }, false);
         alert('注册成功，请登录');
@@ -70,6 +86,7 @@ async function register() {
         document.getElementById('message').innerText = e.message;
     }
 }
+
 
 // 文章列表加载（索引页）
 async function loadArticles(page = 1) {

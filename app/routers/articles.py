@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
 from app import schemas, crud
 from app.database import get_db
 from app.auth import get_current_user
@@ -8,13 +7,29 @@ from app.models import User
 
 router = APIRouter()
 
+def _article_to_dict(article):
+    """将 ORM 文章对象转换为符合 ArticleOut 的字典"""
+    return {
+        "id": article.id,
+        "title": article.title,
+        "content": article.content,
+        "author": {
+            "id": article.author.id,
+            "username": article.author.username,
+        },
+        "tags": [tag.name for tag in article.tags],
+        "created_at": article.created_at,
+        "updated_at": article.updated_at,
+    }
+
 @router.post("/api/articles", response_model=schemas.ArticleOut, status_code=201)
 def create_article(
     article: schemas.ArticleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return crud.create_article(db, article, author_id=current_user.id)
+    db_article = crud.create_article(db, article, author_id=current_user.id)
+    return _article_to_dict(db_article)
 
 @router.get("/api/articles", response_model=schemas.ArticleList)
 def list_articles(
@@ -23,22 +38,15 @@ def list_articles(
     db: Session = Depends(get_db)
 ):
     articles, total = crud.get_articles(db, page, page_size)
-    # 转换 tags 为字符串列表
-    items = []
-    for art in articles:
-        art_dict = schemas.ArticleOut.from_orm(art).dict()
-        art_dict['tags'] = [tag.name for tag in art.tags]
-        items.append(art_dict)
+    items = [_article_to_dict(art) for art in articles]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 @router.get("/api/articles/{article_id}", response_model=schemas.ArticleOut)
 def get_article(article_id: int, db: Session = Depends(get_db)):
-    art = crud.get_article(db, article_id)
-    if not art:
-        raise HTTPException(status_code=404, detail="没有找到文章")
-    art_dict = schemas.ArticleOut.from_orm(art).dict()
-    art_dict['tags'] = [tag.name for tag in art.tags]
-    return art_dict
+    article = crud.get_article(db, article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    return _article_to_dict(article)
 
 @router.put("/api/articles/{article_id}", response_model=schemas.ArticleOut)
 def update_article(
@@ -47,15 +55,13 @@ def update_article(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    art = crud.get_article(db, article_id)
-    if not art:
-        raise HTTPException(status_code=404, detail="没有找到文章")
-    if art.author_id != current_user.id:
-        raise HTTPException(status_code=403, detail="您没有权限更新这篇文章")
-    updated_art = crud.update_article(db, article_id, article)
-    art_dict = schemas.ArticleOut.from_orm(updated_art).dict()
-    art_dict['tags'] = [tag.name for tag in updated_art.tags]
-    return art_dict
+    existing = crud.get_article(db, article_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    if existing.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="没有权限修改该文章")
+    updated_article = crud.update_article(db, article_id, article)
+    return _article_to_dict(updated_article)
 
 @router.delete("/api/articles/{article_id}", status_code=204)
 def delete_article(
@@ -63,10 +69,10 @@ def delete_article(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    art = crud.get_article(db, article_id)
-    if not art:
-        raise HTTPException(status_code=404, detail="没有找到文章")
-    if art.author_id != current_user.id:
-        raise HTTPException(status_code=403, detail="您没有权限更新这篇文章")
+    existing = crud.get_article(db, article_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    if existing.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="没有权限删除该文章")
     crud.delete_article(db, article_id)
     return None
